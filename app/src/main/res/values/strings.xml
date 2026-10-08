@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agrilens Field</string>
+
+    <string name="login_title">Agrilens Field</string>
+    <string name="login_subtitle">Technician Login</string>
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="btn_login">Log In</string>
+    <string name="login_error_generic">Login failed. Check your username and password.</string>
+    <string name="login_error_network">Could not reach the server. Check your connection.</string>
+
+    <string name="assignments_title">My Testing Assignments</string>
+    <string name="assignments_empty">No pending assignments. Pull down to refresh.</string>
+    <string name="assignments_load_error">Could not load assignments.</string>
+    <string name="action_logout">Log Out</string>
+
+    <string name="probe_title">Digital Probe Reading</string>
+    <string name="probe_connect">Connect Probe</string>
+    <string name="probe_disconnect">Disconnect</string>
+    <string name="probe_read">Read Sensor</string>
+    <string name="probe_status_not_connected">Not connected. Plug in the probe over USB/OTG and tap Connect.</string>
+    <string name="probe_status_connecting">Requesting USB permission…</string>
+    <string name="probe_status_connected">Connected — ready to read.</string>
+    <string name="probe_status_reading">Reading sensor…</string>
+    <string name="probe_status_no_device">No USB serial device found. Check the OTG cable and probe power.</string>
+    <string name="probe_status_permission_denied">USB permission denied.</string>
+    <string name="probe_field_ph">Soil pH</string>
+    <string name="probe_field_n">Nitrogen (N) mg/kg</string>
+    <string name="probe_field_p">Phosphorus (P) mg/kg</string>
+    <string name="probe_field_k">Potassium (K) mg/kg</string>
+    <string name="probe_model_hint">Probe model (e.g. Yago 8-in-1)</string>
+    <string name="probe_submit">Confirm &amp; Save</string>
+    <string name="probe_submit_success">Saved. Fertility score: %1$d — %2$s</string>
+    <string name="probe_submit_error">Could not save the reading.</string>
+</resources>

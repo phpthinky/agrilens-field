@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AgrilensField" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/agrilens_green</item>
+        <item name="colorPrimaryDark">@color/agrilens_green_dark</item>
+        <item name="colorAccent">@color/agrilens_amber</item>
+        <item name="android:windowBackground">@color/agrilens_bg</item>
+    </style>
+</resources>
