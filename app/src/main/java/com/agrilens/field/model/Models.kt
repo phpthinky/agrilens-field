@@ -24,6 +24,7 @@ data class AssignmentResponse(
     val assignment: Assignment,
 )
 
+/** A farm the admin has specifically scheduled this technician to test, by date. */
 data class Assignment(
     val id: Long,
     val scheduled_date: String,
