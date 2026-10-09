@@ -29,6 +29,7 @@ class AssignmentListActivity : AppCompatActivity() {
 
         sessionStore = SessionStore(this)
 
+        binding.toolbar.title = getString(R.string.assignments_title)
         binding.toolbar.inflateMenu(R.menu.menu_assignments)
         binding.toolbar.setOnMenuItemClickListener { onMenuItemSelected(it) }
 

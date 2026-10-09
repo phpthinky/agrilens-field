@@ -10,8 +10,8 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/agrilens_green"
-        android:title="@string/assignments_title"
-        android:titleTextColor="@color/white"
+        android:minHeight="?attr/actionBarSize"
+        app:title="@string/assignments_title"
         app:titleTextColor="@color/white" />
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout

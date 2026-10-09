@@ -1,8 +1,12 @@
 package com.agrilens.field.ui
 
 import android.content.Context
+import android.content.Intent
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -47,8 +51,28 @@ class ProbeReadActivity : AppCompatActivity() {
         binding.btnConnect.setOnClickListener { performRead() }
         binding.btnRead.setOnClickListener { performRead() }
         binding.btnSubmit.setOnClickListener { submitReading() }
+        binding.btnOpenSettings.setOnClickListener {
+            runCatching { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+        }
+
+        val requiredFieldWatcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) = updateSubmitEnabled()
+        }
+        binding.inputNitrogen.addTextChangedListener(requiredFieldWatcher)
+        binding.inputPhosphorus.addTextChangedListener(requiredFieldWatcher)
+        binding.inputPotassium.addTextChangedListener(requiredFieldWatcher)
 
         loadAssignmentDetail()
+    }
+
+    /** Submit is allowed once N/P/K are filled — whether they came from a probe read or were typed in by hand. */
+    private fun updateSubmitEnabled() {
+        val n = binding.inputNitrogen.text?.toString()?.toDoubleOrNull()
+        val p = binding.inputPhosphorus.text?.toString()?.toDoubleOrNull()
+        val k = binding.inputPotassium.text?.toString()?.toDoubleOrNull()
+        binding.btnSubmit.isEnabled = n != null && p != null && k != null
     }
 
     private fun loadAssignmentDetail() {
@@ -75,22 +99,26 @@ class ProbeReadActivity : AppCompatActivity() {
     private fun performRead() {
         setReadingInProgress(true)
         setStatus(getString(R.string.probe_status_connecting))
+        binding.btnOpenSettings.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
                 val reading = probeReader.readProbe(this@ProbeReadActivity)
                 lastReading = reading
                 applyReading(reading)
+                updateSubmitEnabled()
 
-                if (reading.hasCoreNpk()) {
-                    setStatus(getString(R.string.probe_status_connected))
-                    binding.btnSubmit.isEnabled = true
-                } else {
-                    setStatus("Connected, but the probe didn't report N/P/K. Try again.")
-                }
+                setStatus(
+                    if (reading.hasCoreNpk()) {
+                        getString(R.string.probe_status_connected)
+                    } else {
+                        "Connected, but the probe didn't report N/P/K. Try again, or enter values manually below."
+                    }
+                )
                 binding.btnRead.isEnabled = true
             } catch (e: ProbeException) {
                 setStatus(messageFor(e))
+                binding.btnOpenSettings.visibility = if (e is ProbeException.NoDeviceFound) View.VISIBLE else View.GONE
             } catch (e: Exception) {
                 setStatus(e.message ?: "Unexpected error reading the probe.")
             } finally {

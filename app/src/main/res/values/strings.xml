@@ -23,8 +23,9 @@
     <string name="probe_status_connecting">Requesting USB permission…</string>
     <string name="probe_status_connected">Connected — ready to read.</string>
     <string name="probe_status_reading">Reading sensor…</string>
-    <string name="probe_status_no_device">No USB serial device found. Check the OTG cable and probe power.</string>
+    <string name="probe_status_no_device">No USB serial device found. If the probe is plugged in, your phone\'s OTG/USB connection may be switched off — check Settings, then tap Connect again.</string>
     <string name="probe_status_permission_denied">USB permission denied.</string>
+    <string name="probe_open_settings">Open Phone Settings</string>
     <string name="probe_field_ph">Soil pH</string>
     <string name="probe_field_n">Nitrogen (N) mg/kg</string>
     <string name="probe_field_p">Phosphorus (P) mg/kg</string>
