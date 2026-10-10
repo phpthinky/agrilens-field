@@ -186,7 +186,11 @@ class ProbeReadActivity : AppCompatActivity() {
                     ).show()
                     finish()
                 } else {
-                    showSubmitError("${getString(R.string.probe_submit_error)} (${response.code()})")
+                    val serverMessage = runCatching {
+                        response.errorBody()?.string()
+                            ?.let { com.google.gson.Gson().fromJson(it, Map::class.java)["message"] as? String }
+                    }.getOrNull()
+                    showSubmitError(serverMessage ?: "${getString(R.string.probe_submit_error)} (${response.code()})")
                 }
             } catch (e: IOException) {
                 showSubmitError(getString(R.string.login_error_network))

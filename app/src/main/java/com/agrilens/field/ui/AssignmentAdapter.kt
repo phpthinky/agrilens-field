@@ -1,8 +1,11 @@
 package com.agrilens.field.ui
 
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.agrilens.field.R
 import com.agrilens.field.databinding.ItemAssignmentBinding
 import com.agrilens.field.model.Assignment
 import java.text.SimpleDateFormat
@@ -42,6 +45,17 @@ class AssignmentAdapter(
             binding.textFarmerName.text = "Farmer: ${assignment.farm.farmer_name}"
             binding.textBarangay.text = "Barangay ${assignment.farm.barangay}"
             binding.textDate.text = formatDate(assignment.scheduled_date)
+
+            binding.textStatus.text = assignment.status.replace('_', ' ').uppercase(Locale.US)
+            val colorRes = when (assignment.status) {
+                "completed" -> R.color.agrilens_green
+                "in_progress" -> R.color.agrilens_amber
+                "overdue", "cancelled" -> R.color.agrilens_red
+                else -> R.color.text_muted
+            }
+            binding.textStatus.backgroundTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(binding.root.context, colorRes))
+
             binding.root.setOnClickListener { onClick(assignment) }
         }
 

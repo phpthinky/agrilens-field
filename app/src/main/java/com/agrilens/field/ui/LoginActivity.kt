@@ -26,7 +26,7 @@ class LoginActivity : AppCompatActivity() {
         sessionStore = SessionStore(this)
 
         if (sessionStore.isLoggedIn) {
-            goToAssignments()
+            goToDashboard()
             return
         }
 
@@ -52,7 +52,7 @@ class LoginActivity : AppCompatActivity() {
                     val body = response.body()!!
                     sessionStore.token = body.token
                     sessionStore.username = body.user.username
-                    goToAssignments()
+                    goToDashboard()
                 } else if (response.code() == 422) {
                     showError(getString(R.string.login_error_generic))
                 } else {
@@ -68,8 +68,8 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    private fun goToAssignments() {
-        startActivity(Intent(this, AssignmentListActivity::class.java))
+    private fun goToDashboard() {
+        startActivity(Intent(this, DashboardActivity::class.java))
         finish()
     }
 

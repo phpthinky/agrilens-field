@@ -10,10 +10,67 @@
     <string name="login_error_generic">Login failed. Check your username and password.</string>
     <string name="login_error_network">Could not reach the server. Check your connection.</string>
 
+    <string name="action_logout">Log Out</string>
+
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_load_error">Could not load the dashboard.</string>
+    <string name="stat_barangays">Assigned Barangays</string>
+    <string name="stat_farmers">Registered Farmers</string>
+    <string name="stat_pending">Pending Tasks</string>
+    <string name="stat_today">Scheduled Today</string>
+    <string name="stat_overdue">Overdue</string>
+    <string name="stat_completed">Completed Analyses</string>
+    <string name="action_new_analysis">New Analysis</string>
+    <string name="action_pending_tasks">Pending Tasks</string>
+    <string name="recent_activity_title">Recent Activity</string>
+    <string name="recent_activity_empty">No analyses submitted yet.</string>
+
     <string name="assignments_title">My Testing Assignments</string>
     <string name="assignments_empty">No pending assignments. Pull down to refresh.</string>
     <string name="assignments_load_error">Could not load assignments.</string>
-    <string name="action_logout">Log Out</string>
+
+    <string name="assignment_detail_title">Task Details</string>
+    <string name="assignment_detail_load_error">Could not load this task.</string>
+    <string name="assignment_begin_testing">Begin Soil Testing</string>
+    <string name="assignment_start_error">Could not start this task.</string>
+
+    <string name="barangays_title">Assigned Barangays</string>
+    <string name="barangays_empty">No barangays assigned to this account yet.</string>
+    <string name="barangays_load_error">Could not load barangays.</string>
+
+    <string name="farmers_title">Farmers</string>
+    <string name="farmers_empty">No farmers registered in this barangay yet.</string>
+    <string name="farmers_load_error">Could not load farmers.</string>
+
+    <string name="farms_title">Farms</string>
+    <string name="farms_empty">This farmer has no registered farms yet. Ask an authorized user to register a farm first.</string>
+    <string name="farms_load_error">Could not load farms.</string>
+
+    <string name="new_analysis_title">New Soil Analysis</string>
+    <string name="new_analysis_test_now">Test Now</string>
+    <string name="new_analysis_test_now_desc">Pick a farm and run the analysis immediately.</string>
+    <string name="new_analysis_schedule">Schedule Soil Test</string>
+    <string name="new_analysis_schedule_desc">Pick a farm and book a future testing date.</string>
+
+    <string name="schedule_title">Schedule Soil Test</string>
+    <string name="schedule_date_hint">Scheduled date</string>
+    <string name="schedule_notes_hint">Notes (optional)</string>
+    <string name="schedule_submit">Schedule</string>
+    <string name="schedule_submit_success">Soil test scheduled for %1$s.</string>
+    <string name="schedule_submit_error">Could not schedule the soil test.</string>
+    <string name="schedule_pick_date">Pick a date</string>
+
+    <string name="tasks_title">Completed Analyses</string>
+    <string name="tasks_empty_completed">No completed analyses yet.</string>
+    <string name="tasks_load_error">Could not load tasks.</string>
+
+    <string name="analysis_title">New Soil Analysis</string>
+    <string name="analysis_method_manual">Manual Entry</string>
+    <string name="analysis_method_probe">Digital Probe</string>
+    <string name="analysis_field_sample_name">Sample name (optional)</string>
+    <string name="analysis_submit">Save Analysis</string>
+    <string name="analysis_submit_success">Saved. Fertility score: %1$d — %2$s</string>
+    <string name="analysis_submit_error">Could not save the analysis.</string>
 
     <string name="probe_title">Digital Probe Reading</string>
     <string name="probe_connect">Connect Probe</string>

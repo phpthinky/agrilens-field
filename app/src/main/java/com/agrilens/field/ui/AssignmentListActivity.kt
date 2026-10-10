@@ -30,6 +30,7 @@ class AssignmentListActivity : AppCompatActivity() {
         sessionStore = SessionStore(this)
 
         binding.toolbar.title = getString(R.string.assignments_title)
+        binding.toolbar.setNavigationOnClickListener { finish() }
         binding.toolbar.inflateMenu(R.menu.menu_assignments)
         binding.toolbar.setOnMenuItemClickListener { onMenuItemSelected(it) }
 
@@ -54,8 +55,8 @@ class AssignmentListActivity : AppCompatActivity() {
     }
 
     private fun openAssignment(assignment: Assignment) {
-        val intent = Intent(this, ProbeReadActivity::class.java)
-        intent.putExtra(ProbeReadActivity.EXTRA_ASSIGNMENT_ID, assignment.id)
+        val intent = Intent(this, AssignmentDetailActivity::class.java)
+        intent.putExtra(AssignmentDetailActivity.EXTRA_ASSIGNMENT_ID, assignment.id)
         startActivity(intent)
     }
 

@@ -26,7 +26,43 @@
         </activity>
 
         <activity
+            android:name=".ui.DashboardActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.AssignmentListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.AssignmentDetailActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.BarangayListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.FarmerListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.FarmListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.NewAnalysisChoiceActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.CreateAnalysisActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.ScheduleAssignmentActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.TaskListActivity"
             android:exported="false" />
 
         <activity

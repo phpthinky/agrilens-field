@@ -11,6 +11,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="@color/agrilens_green"
         android:minHeight="?attr/actionBarSize"
+        app:navigationIcon="@drawable/ic_back"
         app:title="@string/assignments_title"
         app:titleTextColor="@color/white" />
 
