@@ -168,6 +168,63 @@ data class TaskItem(
     val fertility_score: Int?,
 )
 
+data class CreateColorimetricSampleRequest(
+    val sample_name: String?,
+)
+
+/**
+ * Server-side progress of a colorimetric sample. The app only captures and
+ * uploads webcam photos — color picking, pH/ppm conversion, averaging and
+ * the pH Step 1 → Step 2 indicator choice all happen on the server.
+ */
+data class ColorimetricStatus(
+    val sample: ColorimetricSample,
+    val parameters: List<ColorimetricParameter>,
+)
+
+data class ColorimetricSample(
+    val id: Long,
+    val sample_name: String?,
+    val farm_name: String?,
+    val farmer_name: String?,
+    val analyzed: Boolean,
+    val ready_to_analyze: Boolean,
+)
+
+/** One of ph | nitrogen | phosphorus | potassium. */
+data class ColorimetricParameter(
+    val key: String,
+    val label: String,
+    val reagent: String?,
+    val captures: Int,
+    val required: Int,
+    val complete: Boolean,
+    val can_capture: Boolean,
+    val can_reset: Boolean,
+    val reaction_seconds: Int,
+    val average_hex: String?,
+    val message: String?,
+)
+
+data class ColorimetricCaptureResponse(
+    val message: String,
+    val capture: ColorimetricCapture,
+    val status: ColorimetricStatus,
+)
+
+data class ColorimetricCapture(
+    val parameter: String,
+    val color_hex: String,
+    val computed_value: Double?,
+)
+
+data class ColorimetricResetResponse(
+    val message: String,
+    val status: ColorimetricStatus,
+)
+
+data class ResultLinkResponse(val url: String)
+
 /** A single decoded channel from the probe (e.g. pH, N, P, K, moisture...). */
 data class ProbeReading(
     val ph: Double? = null,

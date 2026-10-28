@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import com.agrilens.field.R
 import com.agrilens.field.databinding.ActivityCreateAnalysisBinding
 import com.agrilens.field.model.CreateAnalysisRequest
+import com.agrilens.field.model.CreateColorimetricSampleRequest
 import com.agrilens.field.model.ProbeReading
 import com.agrilens.field.network.ApiClient
 import com.agrilens.field.serial.ProbeException
@@ -54,8 +55,14 @@ class CreateAnalysisActivity : AppCompatActivity() {
 
         binding.toggleMethod.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
+            val colorimetric = checkedId == R.id.btnMethodColorimetric
             binding.groupProbeControls.visibility =
                 if (checkedId == R.id.btnMethodProbe) View.VISIBLE else View.GONE
+            binding.groupValueEntry.visibility = if (colorimetric) View.GONE else View.VISIBLE
+            binding.textColorimetricInfo.visibility = if (colorimetric) View.VISIBLE else View.GONE
+            binding.btnSubmit.setText(if (colorimetric) R.string.colorimetric_start else R.string.analysis_submit)
+            hideSubmitError()
+            updateSubmitEnabled()
         }
 
         binding.btnConnect.setOnClickListener { performRead() }
@@ -77,7 +84,14 @@ class CreateAnalysisActivity : AppCompatActivity() {
 
     private fun isProbeMode(): Boolean = binding.toggleMethod.checkedButtonId == R.id.btnMethodProbe
 
+    private fun isColorimetricMode(): Boolean =
+        binding.toggleMethod.checkedButtonId == R.id.btnMethodColorimetric
+
     private fun updateSubmitEnabled() {
+        if (isColorimetricMode()) {
+            binding.btnSubmit.isEnabled = true
+            return
+        }
         val n = binding.inputNitrogen.text?.toString()?.toDoubleOrNull()
         val p = binding.inputPhosphorus.text?.toString()?.toDoubleOrNull()
         val k = binding.inputPotassium.text?.toString()?.toDoubleOrNull()
@@ -137,6 +151,11 @@ class CreateAnalysisActivity : AppCompatActivity() {
     }
 
     private fun submit() {
+        if (isColorimetricMode()) {
+            startColorimetric()
+            return
+        }
+
         val nitrogen = binding.inputNitrogen.text?.toString()?.toDoubleOrNull()
         val phosphorus = binding.inputPhosphorus.text?.toString()?.toDoubleOrNull()
         val potassium = binding.inputPotassium.text?.toString()?.toDoubleOrNull()
@@ -183,6 +202,46 @@ class CreateAnalysisActivity : AppCompatActivity() {
                             ?.let { com.google.gson.Gson().fromJson(it, Map::class.java)["message"] as? String }
                     }.getOrNull()
                     showSubmitError(serverMessage ?: "${getString(R.string.analysis_submit_error)} (${response.code()})")
+                }
+            } catch (e: IOException) {
+                showSubmitError(getString(R.string.login_error_network))
+            } finally {
+                setSubmitting(false)
+            }
+        }
+    }
+
+    /**
+     * Creates the colorimetric sample on the server, then hands over to the
+     * webcam capture screen. No values are entered here — the server derives
+     * them from the uploaded photos.
+     */
+    private fun startColorimetric() {
+        val sampleName = binding.inputSampleName.text?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
+
+        hideSubmitError()
+        setSubmitting(true)
+
+        lifecycleScope.launch {
+            try {
+                val api = ApiClient.create(sessionStore)
+                val response = api.createColorimetricSample(farmId, CreateColorimetricSampleRequest(sampleName))
+                val body = response.body()
+
+                if (response.isSuccessful && body != null) {
+                    val farmName = intent.getStringExtra(EXTRA_FARM_NAME)
+                    val colorimetricIntent = Intent(this@CreateAnalysisActivity, ColorimetricActivity::class.java).apply {
+                        putExtra(ColorimetricActivity.EXTRA_SAMPLE_ID, body.sample.id)
+                        putExtra(ColorimetricActivity.EXTRA_TITLE, farmName)
+                    }
+                    startActivity(colorimetricIntent)
+                    finish()
+                } else {
+                    val serverMessage = runCatching {
+                        response.errorBody()?.string()
+                            ?.let { com.google.gson.Gson().fromJson(it, Map::class.java)["message"] as? String }
+                    }.getOrNull()
+                    showSubmitError(serverMessage ?: "${getString(R.string.colorimetric_start_error)} (${response.code()})")
                 }
             } catch (e: IOException) {
                 showSubmitError(getString(R.string.login_error_network))

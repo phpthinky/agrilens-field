@@ -12,6 +12,9 @@ import java.util.concurrent.TimeUnit
 object ApiConfig {
     /** Base URL of the deployed Agrilens 2.0 Laravel app's API. */
     const val BASE_URL = "https://agrilens.capstonedemo.com/api/"
+
+    /** Host the in-app result browser is allowed to stay on. */
+    const val WEB_HOST = "agrilens.capstonedemo.com"
 }
 
 class AuthInterceptor(private val sessionStore: SessionStore) : Interceptor {
@@ -51,6 +54,8 @@ object ApiClient {
             .addInterceptor(logging)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
+            // Colorimeter photos are uploaded over field mobile data.
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()

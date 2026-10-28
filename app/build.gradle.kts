@@ -72,6 +72,8 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     implementation("com.github.mik3y:usb-serial-for-android:3.11.0")
+    // UVC (USB/OTG webcam) driver for the colorimeter box's camera.
+    implementation("com.herohan:UVCAndroid:1.0.13")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

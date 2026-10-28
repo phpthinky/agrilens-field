@@ -67,6 +67,7 @@
     <string name="analysis_title">New Soil Analysis</string>
     <string name="analysis_method_manual">Manual Entry</string>
     <string name="analysis_method_probe">Digital Probe</string>
+    <string name="analysis_method_colorimetric">Colorimetric</string>
     <string name="analysis_field_sample_name">Sample name (optional)</string>
     <string name="analysis_submit">Save Analysis</string>
     <string name="analysis_submit_success">Saved. Fertility score: %1$d — %2$s</string>
@@ -91,4 +92,41 @@
     <string name="probe_submit">Confirm &amp; Save</string>
     <string name="probe_submit_success">Saved. Fertility score: %1$d — %2$s</string>
     <string name="probe_submit_error">Could not save the reading.</string>
+
+    <string name="colorimetric_method_desc">Photograph the pH, N, P and K reagent tubes with the colorimeter box\'s USB webcam (3 captures each). The photos are uploaded and analyzed on the Agrilens server.</string>
+    <string name="colorimetric_start">Start Colorimetric Test</string>
+    <string name="colorimetric_start_error">Could not start the colorimetric test.</string>
+    <string name="colorimetric_title">Colorimetric Test</string>
+    <string name="colorimetric_parameters_title">Parameters</string>
+    <string name="colorimetric_done">✓ Done</string>
+    <string name="colorimetric_selected_capture">%1$s — capture %2$d of %3$d</string>
+    <string name="colorimetric_selected_done">%1$s — complete</string>
+    <string name="colorimetric_timer_start">Start reaction timer</string>
+    <string name="colorimetric_timer_done">Ready to capture!</string>
+    <string name="colorimetric_capture">Capture &amp; Upload</string>
+    <string name="colorimetric_capture_saved">%1$s (%2$s)</string>
+    <string name="colorimetric_upload_error">Could not upload the photo.</string>
+    <string name="colorimetric_load_error">Could not load the test progress.</string>
+    <string name="colorimetric_reset">Retake captures</string>
+    <string name="colorimetric_reset_title">Retake %1$s?</string>
+    <string name="colorimetric_reset_message">All captures for this parameter will be deleted on the server so you can test it again.</string>
+    <string name="colorimetric_reset_error">Could not clear the captures.</string>
+    <string name="colorimetric_analyze">Analyze</string>
+    <string name="colorimetric_view_result">View Result</string>
+    <string name="colorimetric_analyze_hint">Available once all four parameters are complete.</string>
+    <string name="colorimetric_analyze_error">Could not open the result.</string>
+
+    <string name="webcam_default_name">USB camera</string>
+    <string name="webcam_rescan">Scan again</string>
+    <string name="webcam_status_waiting">No USB webcam detected. Connect the colorimeter box with an OTG adapter.</string>
+    <string name="webcam_status_connecting">Connecting to %1$s…</string>
+    <string name="webcam_status_streaming">Colorimeter camera: %1$s</string>
+    <string name="webcam_status_disconnected">Webcam disconnected. Re-plug the colorimeter box.</string>
+    <string name="webcam_status_permission_denied">USB permission denied. Tap Scan again and allow access.</string>
+    <string name="webcam_status_camera_permission">Camera permission is required to use the USB webcam.</string>
+    <string name="webcam_status_error">The webcam could not be opened. Re-plug it and tap Scan again.</string>
+
+    <string name="result_title">Analysis Result</string>
+    <string name="result_open_link_error">Could not open this link.</string>
+    <string name="result_downloading">Downloading %1$s…</string>
 </resources>
