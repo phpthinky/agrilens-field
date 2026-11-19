@@ -52,7 +52,7 @@ class ProbeReader(private val usbManager: UsbManager) {
             } else {
                 0
             }
-            val pendingIntent = PendingIntent.getBroadcast(context, 0, Intent(action), flags)
+            val pendingIntent = PendingIntent.getBroadcast(context, 0, Intent(action).setPackage(context.packageName), flags)
 
             ContextCompat.registerReceiver(
                 context,

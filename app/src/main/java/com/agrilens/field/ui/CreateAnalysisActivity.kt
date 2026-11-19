@@ -12,16 +12,23 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.agrilens.field.R
+import com.agrilens.field.colorimetry.ColorimetricRepository
+import com.agrilens.field.colorimetry.MobileTest
 import com.agrilens.field.databinding.ActivityCreateAnalysisBinding
 import com.agrilens.field.model.CreateAnalysisRequest
 import com.agrilens.field.model.ProbeReading
 import com.agrilens.field.network.ApiClient
 import com.agrilens.field.serial.ProbeException
 import com.agrilens.field.serial.ProbeReader
+import com.agrilens.field.storage.ConfigStore
 import com.agrilens.field.storage.SessionStore
+import com.agrilens.field.storage.TestStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
+import java.util.UUID
 
 class CreateAnalysisActivity : AppCompatActivity() {
 
@@ -54,8 +61,14 @@ class CreateAnalysisActivity : AppCompatActivity() {
 
         binding.toggleMethod.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
+            val colorimetric = checkedId == R.id.btnMethodColorimetric
             binding.groupProbeControls.visibility =
                 if (checkedId == R.id.btnMethodProbe) View.VISIBLE else View.GONE
+            binding.groupValueEntry.visibility = if (colorimetric) View.GONE else View.VISIBLE
+            binding.textColorimetricInfo.visibility = if (colorimetric) View.VISIBLE else View.GONE
+            binding.btnSubmit.setText(if (colorimetric) R.string.colorimetric_start else R.string.analysis_submit)
+            hideSubmitError()
+            updateSubmitEnabled()
         }
 
         binding.btnConnect.setOnClickListener { performRead() }
@@ -77,7 +90,14 @@ class CreateAnalysisActivity : AppCompatActivity() {
 
     private fun isProbeMode(): Boolean = binding.toggleMethod.checkedButtonId == R.id.btnMethodProbe
 
+    private fun isColorimetricMode(): Boolean =
+        binding.toggleMethod.checkedButtonId == R.id.btnMethodColorimetric
+
     private fun updateSubmitEnabled() {
+        if (isColorimetricMode()) {
+            binding.btnSubmit.isEnabled = true
+            return
+        }
         val n = binding.inputNitrogen.text?.toString()?.toDoubleOrNull()
         val p = binding.inputPhosphorus.text?.toString()?.toDoubleOrNull()
         val k = binding.inputPotassium.text?.toString()?.toDoubleOrNull()
@@ -137,6 +157,11 @@ class CreateAnalysisActivity : AppCompatActivity() {
     }
 
     private fun submit() {
+        if (isColorimetricMode()) {
+            startColorimetric()
+            return
+        }
+
         val nitrogen = binding.inputNitrogen.text?.toString()?.toDoubleOrNull()
         val phosphorus = binding.inputPhosphorus.text?.toString()?.toDoubleOrNull()
         val potassium = binding.inputPotassium.text?.toString()?.toDoubleOrNull()
@@ -186,6 +211,46 @@ class CreateAnalysisActivity : AppCompatActivity() {
                 }
             } catch (e: IOException) {
                 showSubmitError(getString(R.string.login_error_network))
+            } finally {
+                setSubmitting(false)
+            }
+        }
+    }
+
+    /**
+     * Starts a mobile colorimetric test on this phone — nothing is created on
+     * the server until the finished test is synced. Downloads fresh colour
+     * charts when online; offline, the copy already on the phone is used.
+     */
+    private fun startColorimetric() {
+        val sampleName = binding.inputSampleName.text?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
+
+        hideSubmitError()
+        setSubmitting(true)
+
+        lifecycleScope.launch {
+            try {
+                val testStore = TestStore(this@CreateAnalysisActivity)
+                val repository = ColorimetricRepository(ApiClient.create(sessionStore), ConfigStore(this@CreateAnalysisActivity), testStore)
+                val config = repository.freshOrSavedConfig()
+                if (config == null) {
+                    showSubmitError(getString(R.string.colorimetric_needs_charts))
+                    return@launch
+                }
+
+                val test = MobileTest(
+                    uuid = UUID.randomUUID().toString(),
+                    farm_id = farmId,
+                    farm_name = intent.getStringExtra(EXTRA_FARM_NAME),
+                    farm_meta = intent.getStringExtra(EXTRA_FARM_META),
+                    sample_name = sampleName,
+                    created_at = System.currentTimeMillis(),
+                    config_version = config.config.version,
+                )
+                withContext(Dispatchers.IO) { testStore.save(test) }
+
+                startActivity(ColorimetricActivity.intent(this@CreateAnalysisActivity, test.uuid))
+                finish()
             } finally {
                 setSubmitting(false)
             }

@@ -168,6 +168,16 @@ data class TaskItem(
     val fertility_score: Int?,
 )
 
+/** POST /farms/{id}/mobile-colorimetric reply (also returned when the test was already uploaded). */
+data class MobileColorimetricSyncResponse(
+    val message: String,
+    val sample_id: Long,
+    val fertility_score: Int?,
+    val recommended_crop: String?,
+)
+
+data class ResultLinkResponse(val url: String)
+
 /** A single decoded channel from the probe (e.g. pH, N, P, K, moisture...). */
 data class ProbeReading(
     val ph: Double? = null,

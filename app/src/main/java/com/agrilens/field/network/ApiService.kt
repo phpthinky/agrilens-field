@@ -2,6 +2,7 @@ package com.agrilens.field.network
 
 import com.agrilens.field.model.AssignmentListResponse
 import com.agrilens.field.model.AssignmentResponse
+import com.agrilens.field.colorimetry.ColorimetricConfig
 import com.agrilens.field.model.BarangayListResponse
 import com.agrilens.field.model.CompleteAssignmentRequest
 import com.agrilens.field.model.CompleteAssignmentResponse
@@ -12,13 +13,19 @@ import com.agrilens.field.model.FarmListResponse
 import com.agrilens.field.model.FarmerListResponse
 import com.agrilens.field.model.LoginRequest
 import com.agrilens.field.model.LoginResponse
+import com.agrilens.field.model.MobileColorimetricSyncResponse
+import com.agrilens.field.model.ResultLinkResponse
 import com.agrilens.field.model.ScheduleAssignmentRequest
 import com.agrilens.field.model.ScheduleAssignmentResponse
 import com.agrilens.field.model.TaskListResponse
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -68,6 +75,22 @@ interface ApiService {
         @Path("id") farmId: Long,
         @Body body: ScheduleAssignmentRequest,
     ): Response<ScheduleAssignmentResponse>
+
+    /** Colour charts for offline mobile colorimetric tests. */
+    @GET("colorimetric/config")
+    suspend fun getColorimetricConfig(): Response<ColorimetricConfig>
+
+    /** Upload a finished mobile colorimetric test: `payload` JSON + photos[<name>] files. */
+    @Multipart
+    @POST("farms/{id}/mobile-colorimetric")
+    suspend fun syncMobileColorimetric(
+        @Path("id") farmId: Long,
+        @Part("payload") payload: RequestBody,
+        @Part photos: List<MultipartBody.Part>,
+    ): Response<MobileColorimetricSyncResponse>
+
+    @POST("samples/{id}/result-link")
+    suspend fun getResultLink(@Path("id") sampleId: Long): Response<ResultLinkResponse>
 
     @GET("tasks")
     suspend fun listTasks(@Query("status") status: String): Response<TaskListResponse>
