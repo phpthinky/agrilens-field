@@ -12,17 +12,23 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.agrilens.field.R
+import com.agrilens.field.colorimetry.ColorimetricRepository
+import com.agrilens.field.colorimetry.MobileTest
 import com.agrilens.field.databinding.ActivityCreateAnalysisBinding
 import com.agrilens.field.model.CreateAnalysisRequest
-import com.agrilens.field.model.CreateColorimetricSampleRequest
 import com.agrilens.field.model.ProbeReading
 import com.agrilens.field.network.ApiClient
 import com.agrilens.field.serial.ProbeException
 import com.agrilens.field.serial.ProbeReader
+import com.agrilens.field.storage.ConfigStore
 import com.agrilens.field.storage.SessionStore
+import com.agrilens.field.storage.TestStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
+import java.util.UUID
 
 class CreateAnalysisActivity : AppCompatActivity() {
 
@@ -212,9 +218,9 @@ class CreateAnalysisActivity : AppCompatActivity() {
     }
 
     /**
-     * Creates the colorimetric sample on the server, then hands over to the
-     * webcam capture screen. No values are entered here — the server derives
-     * them from the uploaded photos.
+     * Starts a mobile colorimetric test on this phone — nothing is created on
+     * the server until the finished test is synced. Downloads fresh colour
+     * charts when online; offline, the copy already on the phone is used.
      */
     private fun startColorimetric() {
         val sampleName = binding.inputSampleName.text?.toString()?.trim().takeUnless { it.isNullOrEmpty() }
@@ -224,27 +230,27 @@ class CreateAnalysisActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val api = ApiClient.create(sessionStore)
-                val response = api.createColorimetricSample(farmId, CreateColorimetricSampleRequest(sampleName))
-                val body = response.body()
-
-                if (response.isSuccessful && body != null) {
-                    val farmName = intent.getStringExtra(EXTRA_FARM_NAME)
-                    val colorimetricIntent = Intent(this@CreateAnalysisActivity, ColorimetricActivity::class.java).apply {
-                        putExtra(ColorimetricActivity.EXTRA_SAMPLE_ID, body.sample.id)
-                        putExtra(ColorimetricActivity.EXTRA_TITLE, farmName)
-                    }
-                    startActivity(colorimetricIntent)
-                    finish()
-                } else {
-                    val serverMessage = runCatching {
-                        response.errorBody()?.string()
-                            ?.let { com.google.gson.Gson().fromJson(it, Map::class.java)["message"] as? String }
-                    }.getOrNull()
-                    showSubmitError(serverMessage ?: "${getString(R.string.colorimetric_start_error)} (${response.code()})")
+                val testStore = TestStore(this@CreateAnalysisActivity)
+                val repository = ColorimetricRepository(ApiClient.create(sessionStore), ConfigStore(this@CreateAnalysisActivity), testStore)
+                val config = repository.freshOrSavedConfig()
+                if (config == null) {
+                    showSubmitError(getString(R.string.colorimetric_needs_charts))
+                    return@launch
                 }
-            } catch (e: IOException) {
-                showSubmitError(getString(R.string.login_error_network))
+
+                val test = MobileTest(
+                    uuid = UUID.randomUUID().toString(),
+                    farm_id = farmId,
+                    farm_name = intent.getStringExtra(EXTRA_FARM_NAME),
+                    farm_meta = intent.getStringExtra(EXTRA_FARM_META),
+                    sample_name = sampleName,
+                    created_at = System.currentTimeMillis(),
+                    config_version = config.config.version,
+                )
+                withContext(Dispatchers.IO) { testStore.save(test) }
+
+                startActivity(ColorimetricActivity.intent(this@CreateAnalysisActivity, test.uuid))
+                finish()
             } finally {
                 setSubmitting(false)
             }

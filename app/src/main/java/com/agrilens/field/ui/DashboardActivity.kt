@@ -14,6 +14,9 @@ import com.agrilens.field.databinding.ItemRecentActivityBinding
 import com.agrilens.field.model.RecentActivity
 import com.agrilens.field.network.ApiClient
 import com.agrilens.field.storage.SessionStore
+import com.agrilens.field.storage.TestStore
+import com.agrilens.field.storage.ConfigStore
+import com.agrilens.field.colorimetry.ColorimetricRepository
 import kotlinx.coroutines.launch
 import java.io.IOException
 
@@ -38,6 +41,9 @@ class DashboardActivity : AppCompatActivity() {
         binding.btnPendingTasks.setOnClickListener {
             startActivity(Intent(this, AssignmentListActivity::class.java))
         }
+        binding.btnMobileTests.setOnClickListener {
+            startActivity(Intent(this, MobileTestsActivity::class.java))
+        }
         binding.cardCompleted.setOnClickListener {
             startActivity(Intent(this, TaskListActivity::class.java))
         }
@@ -48,6 +54,24 @@ class DashboardActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadDashboard()
+        renderMobileTests()
+        // Keep the offline colour charts current whenever there's signal; failures are fine.
+        lifecycleScope.launch {
+            runCatching {
+                ColorimetricRepository(ApiClient.create(sessionStore), ConfigStore(this@DashboardActivity), TestStore(this@DashboardActivity))
+                    .downloadConfig()
+            }
+        }
+    }
+
+    /** Count colorimetric tests on this phone still waiting to be synced. */
+    private fun renderMobileTests() {
+        val unsynced = TestStore(this).list().count { !it.isSynced }
+        binding.btnMobileTests.text = if (unsynced > 0) {
+            getString(R.string.mobile_tests_button_unsynced, unsynced)
+        } else {
+            getString(R.string.mobile_tests_button)
+        }
     }
 
     private fun onMenuItemSelected(item: MenuItem): Boolean {

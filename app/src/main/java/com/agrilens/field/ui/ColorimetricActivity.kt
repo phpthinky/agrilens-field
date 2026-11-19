@@ -1,12 +1,15 @@
 package com.agrilens.field.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.text.format.DateFormat
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,43 +19,51 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.agrilens.field.R
 import com.agrilens.field.camera.UsbWebcam
+import com.agrilens.field.colorimetry.ColorimetricRepository
+import com.agrilens.field.colorimetry.MobileColorimetry
+import com.agrilens.field.colorimetry.MobileTest
+import com.agrilens.field.colorimetry.ParameterView
+import com.agrilens.field.colorimetry.SnapshotColor
+import com.agrilens.field.colorimetry.StoredConfig
+import com.agrilens.field.colorimetry.TubeColor
 import com.agrilens.field.databinding.ActivityColorimetricBinding
 import com.agrilens.field.databinding.ItemColorimetricParameterBinding
-import com.agrilens.field.model.ColorimetricParameter
-import com.agrilens.field.model.ColorimetricStatus
 import com.agrilens.field.network.ApiClient
-import com.agrilens.field.network.ApiService
+import com.agrilens.field.storage.ConfigStore
 import com.agrilens.field.storage.SessionStore
-import com.google.gson.Gson
+import com.agrilens.field.storage.TestStore
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /**
- * Colorimetric soil test for one sample: preview the colorimeter box's USB/OTG
- * webcam, photograph each reagent tube (3 per parameter) and upload the photos.
- *
- * The server is the source of truth — it picks the color from each photo,
- * converts it, averages the captures and decides pH Step 2's indicator. This
- * screen just renders the status it returns. "Analyze" opens the server's own
- * result page in [ResultWebViewActivity].
+ * Mobile colorimetric test: preview the colorimeter box's USB/OTG webcam,
+ * photograph each reagent tube (3 per parameter) and read every photo on the
+ * phone against the downloaded colour charts — the same steps as the website,
+ * with no signal needed. The test and its photos stay on the phone
+ * ([TestStore]) until "Sync" uploads them as one mobile_colorimetric sample.
  */
 class ColorimetricActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityColorimetricBinding
-    private lateinit var api: ApiService
     private lateinit var webcam: UsbWebcam
+    private lateinit var testStore: TestStore
+    private lateinit var configStore: ConfigStore
+    private lateinit var repository: ColorimetricRepository
 
-    private var sampleId: Long = -1
-    private var status: ColorimetricStatus? = null
+    private lateinit var test: MobileTest
+    private var config: StoredConfig? = null
     private var selectedKey: String? = null
     private var busy = false
     private var timer: CountDownTimer? = null
+    private var captureJob: Job? = null
 
     private val cameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -68,25 +79,36 @@ class ColorimetricActivity : AppCompatActivity() {
         binding = ActivityColorimetricBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        sampleId = intent.getLongExtra(EXTRA_SAMPLE_ID, -1)
-        if (sampleId < 0) {
+        testStore = TestStore(this)
+        configStore = ConfigStore(this)
+        repository = ColorimetricRepository(ApiClient.create(SessionStore(this)), configStore, testStore)
+
+        val loaded = intent.getStringExtra(EXTRA_TEST_ID)?.let { testStore.load(it) }
+        if (loaded == null) {
+            Toast.makeText(this, R.string.colorimetric_load_error, Toast.LENGTH_LONG).show()
             finish()
             return
         }
+        test = loaded
+        config = configStore.load()
 
-        api = ApiClient.create(SessionStore(this))
         webcam = UsbWebcam(binding.cameraView) { state, device -> renderCameraState(state, device) }
+        binding.captureZone.target = binding.cameraView
 
         binding.toolbar.setNavigationOnClickListener { finish() }
-        intent.getStringExtra(EXTRA_TITLE)?.let { binding.toolbar.subtitle = it }
+        binding.toolbar.subtitle = test.farm_name
 
         binding.btnRescan.setOnClickListener {
             if (hasCameraPermission()) webcam.rescan() else cameraPermission.launch(Manifest.permission.CAMERA)
         }
+        binding.btnRefreshCharts.setOnClickListener { refreshCharts() }
         binding.btnCapture.setOnClickListener { capture() }
+        binding.btnCancel.setOnClickListener { cancel() }
         binding.btnReset.setOnClickListener { confirmReset() }
         binding.btnTimer.setOnClickListener { startTimer() }
-        binding.btnAnalyze.setOnClickListener { analyze() }
+        binding.btnAnalyze.setOnClickListener { if (test.isSynced) viewResult() else sync() }
+
+        render()
     }
 
     override fun onStart() {
@@ -96,13 +118,6 @@ class ColorimetricActivity : AppCompatActivity() {
         } else {
             cameraPermission.launch(Manifest.permission.CAMERA)
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Also refreshes after returning from the result page, which is where
-        // the server finalises the analysis.
-        loadStatus()
     }
 
     override fun onStop() {
@@ -118,39 +133,22 @@ class ColorimetricActivity : AppCompatActivity() {
     private fun hasCameraPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
-    // ── Server status ────────────────────────────────────────────────
+    // ── Rendering ────────────────────────────────────────────────────
 
-    private fun loadStatus() {
-        lifecycleScope.launch {
-            try {
-                val response = api.getColorimetricStatus(sampleId)
-                val body = response.body()
-                if (response.isSuccessful && body != null) {
-                    render(body)
-                } else {
-                    showError(errorMessage(response.errorBody()?.string()) ?: getString(R.string.colorimetric_load_error))
-                }
-            } catch (e: IOException) {
-                showError(getString(R.string.login_error_network))
-            }
-        }
-    }
+    private fun render() {
+        binding.textSampleName.text = test.sample_name ?: getString(R.string.colorimetric_title)
+        binding.textSampleMeta.text = listOfNotNull(test.farm_name, test.farm_meta).joinToString(" — ")
 
-    private fun render(newStatus: ColorimetricStatus) {
-        status = newStatus
-        val sample = newStatus.sample
-
-        binding.textSampleName.text = sample.sample_name ?: ""
-        binding.textSampleMeta.text = listOfNotNull(sample.farm_name, sample.farmer_name).joinToString(" — ")
+        val views = MobileColorimetry.views(test)
 
         // Stay on the current parameter until it's done, then move to the next unfinished one.
-        val current = newStatus.parameters.find { it.key == selectedKey }
-        if (current == null || !current.can_capture) {
-            selectedKey = (newStatus.parameters.firstOrNull { it.can_capture } ?: current ?: newStatus.parameters.first()).key
+        val current = views.find { it.key == selectedKey }
+        if (current == null || !current.canCapture) {
+            selectedKey = (views.firstOrNull { it.canCapture } ?: current ?: views.first()).key
         }
 
         binding.parameterContainer.removeAllViews()
-        newStatus.parameters.forEach { parameter ->
+        views.forEach { parameter ->
             val item = ItemColorimetricParameterBinding.inflate(layoutInflater, binding.parameterContainer, true)
             item.textLabel.text = parameter.label
             item.textProgress.text = if (parameter.complete) {
@@ -164,32 +162,31 @@ class ColorimetricActivity : AppCompatActivity() {
             item.textMessage.visibility = if (parameter.message.isNullOrBlank()) View.GONE else View.VISIBLE
             item.textMessage.text = parameter.message
             item.viewSwatch.setBackgroundColor(
-                parseColor(parameter.average_hex) ?: ContextCompat.getColor(this, R.color.text_muted)
+                parseColor(parameter.averageHex) ?: ContextCompat.getColor(this, R.color.text_muted)
             )
-            item.root.isChecked = parameter.key == selectedKey
+            // The stroke marks the selected card; the card's own check icon would cover the count.
+            item.root.checkedIcon = null
             item.root.strokeWidth = if (parameter.key == selectedKey) dp(2) else 0
             item.root.setOnClickListener {
                 selectedKey = parameter.key
-                status?.let { render(it) }
+                render()
             }
         }
 
-        renderSelected()
-
-        binding.btnAnalyze.isEnabled = sample.ready_to_analyze && !busy
-        binding.btnAnalyze.setText(if (sample.analyzed) R.string.colorimetric_view_result else R.string.colorimetric_analyze)
-        binding.textAnalyzeHint.visibility = if (sample.ready_to_analyze) View.GONE else View.VISIBLE
+        renderSelected(views)
+        renderCharts()
+        renderSync()
     }
 
-    private fun selectedParameter(): ColorimetricParameter? =
-        status?.parameters?.find { it.key == selectedKey }
+    private fun selectedParameter(): ParameterView? =
+        MobileColorimetry.views(test).find { it.key == selectedKey }
 
-    private fun renderSelected() {
-        val parameter = selectedParameter() ?: return
+    private fun renderSelected(views: List<ParameterView>) {
+        val parameter = views.find { it.key == selectedKey } ?: return
 
         binding.textSelectedTitle.text = when {
             parameter.complete -> getString(R.string.colorimetric_selected_done, parameter.label)
-            parameter.can_capture -> getString(
+            parameter.canCapture -> getString(
                 R.string.colorimetric_selected_capture,
                 parameter.label,
                 parameter.captures + 1,
@@ -198,17 +195,59 @@ class ColorimetricActivity : AppCompatActivity() {
             else -> parameter.label
         }
         binding.textSelectedReagent.text = listOfNotNull(parameter.reagent, parameter.message).joinToString("\n")
-        binding.btnReset.visibility = if (parameter.can_reset) View.VISIBLE else View.GONE
-        binding.btnTimer.isEnabled = parameter.can_capture
-        if (timer == null) binding.textTimer.text = formatSeconds(parameter.reaction_seconds)
+        binding.btnReset.visibility = if (parameter.canReset) View.VISIBLE else View.GONE
+        binding.btnTimer.isEnabled = parameter.canCapture
+        if (timer == null) binding.textTimer.text = formatSeconds(reactionSeconds())
 
         updateCaptureEnabled()
+    }
+
+    private fun renderCharts() {
+        val stored = config
+        val missing = stored?.config?.missingCharts().orEmpty()
+        binding.textChartsStatus.text = when {
+            stored == null -> getString(R.string.charts_missing)
+            missing.isNotEmpty() -> getString(R.string.charts_incomplete, missing.joinToString(", "))
+            else -> getString(
+                R.string.charts_status,
+                formatServerDate(stored.config.updated_at),
+                DateFormat.getMediumDateFormat(this).format(Date(stored.downloaded_at)) + ", " +
+                    DateFormat.getTimeFormat(this).format(Date(stored.downloaded_at)),
+            )
+        }
+        binding.textChartsStatus.setTextColor(
+            ContextCompat.getColor(this, if (stored == null || missing.isNotEmpty()) R.color.agrilens_red else R.color.text_muted)
+        )
+        binding.btnRefreshCharts.visibility = if (test.isSynced) View.GONE else View.VISIBLE
+    }
+
+    private fun renderSync() {
+        val complete = MobileColorimetry.isComplete(test)
+        binding.btnAnalyze.setText(if (test.isSynced) R.string.colorimetric_view_result else R.string.colorimetric_analyze)
+        binding.btnAnalyze.isEnabled = !busy && (test.isSynced || (complete && config != null))
+        binding.textAnalyzeHint.text = when {
+            test.isSynced -> getString(R.string.colorimetric_synced_status, test.synced_sample_id ?: 0L)
+            complete -> test.sync_error ?: getString(R.string.colorimetric_sync_hint)
+            else -> getString(R.string.colorimetric_analyze_hint)
+        }
+        binding.textAnalyzeHint.setTextColor(
+            ContextCompat.getColor(
+                this,
+                when {
+                    test.isSynced -> R.color.agrilens_green
+                    complete && test.sync_error != null -> R.color.agrilens_red
+                    else -> R.color.text_muted
+                },
+            )
+        )
+        binding.textAnalyzeHint.visibility = View.VISIBLE
     }
 
     private fun updateCaptureEnabled() {
         binding.btnCapture.isEnabled = !busy &&
             webcam.state == UsbWebcam.State.STREAMING &&
-            selectedParameter()?.can_capture == true
+            config?.config?.missingCharts()?.isEmpty() == true &&
+            selectedParameter()?.canCapture == true
     }
 
     // ── Webcam ───────────────────────────────────────────────────────
@@ -236,49 +275,63 @@ class ColorimetricActivity : AppCompatActivity() {
         updateCaptureEnabled()
     }
 
-    // ── Capture → upload ─────────────────────────────────────────────
+    // ── Capture → read on the phone ──────────────────────────────────
 
     private fun capture() {
         val parameter = selectedParameter() ?: return
+        val photo = parameter.nextPhoto ?: return
+        val stored = config ?: return
         setBusy(true)
         hideError()
 
-        lifecycleScope.launch {
-            val dir = File(cacheDir, "colorimeter").apply { mkdirs() }
-            val photo = File(dir, "${parameter.key}-${System.currentTimeMillis()}.jpg")
+        captureJob = lifecycleScope.launch {
+            val file = testStore.photoFile(test.uuid, photo)
             try {
-                webcam.takePicture(photo)
+                webcam.takePicture(file)
+                val color = withContext(Dispatchers.Default) { readColor(file) }
+                val message = MobileColorimetry.addCapture(test, parameter.key, color, photo, stored.config)
+                test.config_version = stored.config.version
+                test.sync_error = null
+                withContext(Dispatchers.IO) { testStore.save(test) }
 
-                val response = api.uploadColorimetricCapture(
-                    sampleId,
-                    parameter.key.toRequestBody("text/plain".toMediaType()),
-                    MultipartBody.Part.createFormData(
-                        "photo",
-                        photo.name,
-                        photo.asRequestBody("image/jpeg".toMediaType()),
-                    ),
-                )
-                val body = response.body()
-
-                if (response.isSuccessful && body != null) {
-                    timer?.cancel()
-                    timer = null
-                    Toast.makeText(
-                        this@ColorimetricActivity,
-                        getString(R.string.colorimetric_capture_saved, body.message, body.capture.color_hex),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                    render(body.status)
-                } else {
-                    showError(errorMessage(response.errorBody()?.string()) ?: getString(R.string.colorimetric_upload_error))
-                    loadStatus()
-                }
-            } catch (e: IOException) {
-                showError(e.message ?: getString(R.string.login_error_network))
+                timer?.cancel()
+                timer = null
+                binding.textTimer.setTextColor(ContextCompat.getColor(this@ColorimetricActivity, R.color.text_muted))
+                Toast.makeText(this@ColorimetricActivity, message, Toast.LENGTH_LONG).show()
+            } catch (e: CancellationException) {
+                file.delete()
+                Toast.makeText(this@ColorimetricActivity, R.string.colorimetric_capture_cancelled, Toast.LENGTH_SHORT).show()
+                throw e
+            } catch (e: Exception) {
+                file.delete()
+                showError(getString(R.string.colorimetric_capture_error, e.message ?: e.javaClass.simpleName))
             } finally {
-                photo.delete()
+                captureJob = null
                 setBusy(false)
+                render()
             }
+        }
+    }
+
+    /** Decode the saved JPEG and pick the tube colour the way the server does. */
+    private fun readColor(file: File): TubeColor {
+        val bitmap = BitmapFactory.decodeFile(file.path) ?: throw IOException("The photo could not be decoded.")
+        try {
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            return SnapshotColor.sampleTube(pixels, bitmap.width, bitmap.height)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /** Stops a capture in progress; otherwise leaves the screen (the test stays saved on the phone). */
+    private fun cancel() {
+        val job = captureJob
+        if (job != null && job.isActive) {
+            job.cancel()
+        } else {
+            finish()
         }
     }
 
@@ -287,50 +340,90 @@ class ColorimetricActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.colorimetric_reset_title, parameter.label))
             .setMessage(R.string.colorimetric_reset_message)
-            .setPositiveButton(R.string.colorimetric_reset) { _, _ -> reset(parameter) }
+            .setPositiveButton(R.string.colorimetric_reset) { _, _ -> reset(parameter.key) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
-    private fun reset(parameter: ColorimetricParameter) {
-        setBusy(true)
-        hideError()
+    private fun reset(key: String) {
+        val photos = MobileColorimetry.reset(test, key)
+        test.sync_error = null
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                testStore.deletePhotos(test.uuid, photos)
+                testStore.save(test)
+            }
+            selectedKey = key
+            render()
+        }
+    }
 
+    // ── Colour charts ────────────────────────────────────────────────
+
+    private fun refreshCharts() {
+        binding.btnRefreshCharts.isEnabled = false
+        binding.textChartsStatus.setText(R.string.charts_refreshing)
         lifecycleScope.launch {
             try {
-                val response = api.resetColorimetricParameter(sampleId, parameter.key)
-                val body = response.body()
-                if (response.isSuccessful && body != null) {
-                    render(body.status)
-                } else {
-                    showError(errorMessage(response.errorBody()?.string()) ?: getString(R.string.colorimetric_reset_error))
-                }
+                config = repository.downloadConfig()
+                Toast.makeText(this@ColorimetricActivity, R.string.charts_refreshed, Toast.LENGTH_SHORT).show()
             } catch (e: IOException) {
-                showError(getString(R.string.login_error_network))
+                Toast.makeText(
+                    this@ColorimetricActivity,
+                    getString(R.string.charts_refresh_error, e.message ?: getString(R.string.login_error_network)),
+                    Toast.LENGTH_LONG,
+                ).show()
             } finally {
-                setBusy(false)
+                binding.btnRefreshCharts.isEnabled = true
+                render()
             }
         }
     }
 
-    // ── Analyze → server result page ─────────────────────────────────
+    // ── Sync → server ────────────────────────────────────────────────
 
-    private fun analyze() {
+    private fun sync() {
+        val stored = config ?: return
+        setBusy(true)
+        hideError()
+        binding.textAnalyzeHint.setText(R.string.colorimetric_syncing)
+
+        lifecycleScope.launch {
+            try {
+                val result = repository.sync(test, stored.config)
+                Toast.makeText(
+                    this@ColorimetricActivity,
+                    getString(R.string.colorimetric_sync_success, result.fertility_score?.toString() ?: "—", result.recommended_crop ?: "—"),
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (e: IOException) {
+                showError(e.message ?: getString(R.string.login_error_network))
+            } finally {
+                setBusy(false)
+                render()
+            }
+        }
+    }
+
+    /** Open the server's result page for the synced sample. */
+    private fun viewResult() {
+        val sampleId = test.synced_sample_id ?: return
         setBusy(true)
         hideError()
 
         lifecycleScope.launch {
             try {
-                val response = api.getResultLink(sampleId)
+                val response = ApiClient.create(SessionStore(this@ColorimetricActivity)).getResultLink(sampleId)
                 val body = response.body()
                 if (response.isSuccessful && body != null) {
-                    val resultIntent = Intent(this@ColorimetricActivity, ResultWebViewActivity::class.java).apply {
-                        putExtra(ResultWebViewActivity.EXTRA_URL, body.url)
-                        putExtra(ResultWebViewActivity.EXTRA_TITLE, status?.sample?.sample_name)
-                    }
-                    startActivity(resultIntent)
+                    startActivity(
+                        Intent(this@ColorimetricActivity, ResultWebViewActivity::class.java).apply {
+                            putExtra(ResultWebViewActivity.EXTRA_URL, body.url)
+                            putExtra(ResultWebViewActivity.EXTRA_TITLE, test.sample_name)
+                        }
+                    )
                 } else {
-                    showError(errorMessage(response.errorBody()?.string()) ?: getString(R.string.colorimetric_analyze_error))
+                    showError(getString(R.string.colorimetric_analyze_error))
                 }
             } catch (e: IOException) {
                 showError(getString(R.string.login_error_network))
@@ -342,8 +435,10 @@ class ColorimetricActivity : AppCompatActivity() {
 
     // ── Reaction timer (informational, like the web page's) ──────────
 
+    private fun reactionSeconds(): Int = config?.config?.reaction_seconds?.takeIf { it > 0 } ?: DEFAULT_REACTION_SECONDS
+
     private fun startTimer() {
-        val seconds = selectedParameter()?.reaction_seconds ?: return
+        val seconds = reactionSeconds()
         timer?.cancel()
         binding.textTimer.setTextColor(ContextCompat.getColor(this, R.color.agrilens_amber))
         timer = object : CountDownTimer(seconds * 1000L, 1000L) {
@@ -364,7 +459,7 @@ class ColorimetricActivity : AppCompatActivity() {
         busy = value
         binding.progressCapture.visibility = if (value) View.VISIBLE else View.GONE
         binding.btnReset.isEnabled = !value
-        binding.btnAnalyze.isEnabled = !value && status?.sample?.ready_to_analyze == true
+        renderSync()
         updateCaptureEnabled()
     }
 
@@ -377,8 +472,14 @@ class ColorimetricActivity : AppCompatActivity() {
         binding.textError.visibility = View.GONE
     }
 
-    private fun errorMessage(errorBody: String?): String? =
-        runCatching { errorBody?.let { Gson().fromJson(it, Map::class.java)["message"] as? String } }.getOrNull()
+    private fun formatServerDate(iso: String?): String =
+        iso?.takeIf { it.length >= 10 }?.let {
+            runCatching {
+                // The calendar date is enough here; java.time would need Android 8+.
+                val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(it.substring(0, 10))
+                date?.let { d -> DateFormat.getMediumDateFormat(this).format(d) }
+            }.getOrNull()
+        } ?: getString(R.string.charts_status_unknown_date)
 
     private fun parseColor(hex: String?): Int? = hex?.let { runCatching { Color.parseColor(it) }.getOrNull() }
 
@@ -388,7 +489,10 @@ class ColorimetricActivity : AppCompatActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        const val EXTRA_SAMPLE_ID = "extra_sample_id"
-        const val EXTRA_TITLE = "extra_title"
+        const val EXTRA_TEST_ID = "extra_test_id"
+        private const val DEFAULT_REACTION_SECONDS = 480
+
+        fun intent(context: Context, testId: String): Intent =
+            Intent(context, ColorimetricActivity::class.java).putExtra(EXTRA_TEST_ID, testId)
     }
 }

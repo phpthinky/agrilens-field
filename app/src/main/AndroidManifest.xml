@@ -83,6 +83,10 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
         <activity
+            android:name=".ui.MobileTestsActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ScheduleAssignmentActivity"
             android:exported="false" />
 

@@ -54,8 +54,8 @@ object ApiClient {
             .addInterceptor(logging)
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
-            // Colorimeter photos are uploaded over field mobile data.
-            .writeTimeout(60, TimeUnit.SECONDS)
+            // A synced colorimetric test uploads up to 15 photos over field mobile data.
+            .writeTimeout(180, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()

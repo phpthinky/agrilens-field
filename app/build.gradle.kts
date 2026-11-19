@@ -20,8 +20,8 @@ android {
         applicationId = "com.agrilens.field"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
@@ -76,4 +76,7 @@ dependencies {
     implementation("com.herohan:UVCAndroid:1.0.13")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.code.gson:gson:2.10.1")
 }

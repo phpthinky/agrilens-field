@@ -232,6 +232,14 @@
                     android:layout_marginTop="8dp"
                     android:text="@string/action_pending_tasks" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMobileTests"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/mobile_tests_button" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
